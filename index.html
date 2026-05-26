@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSEAR - Sistema Semántico de Evaluación Automatizada</title>
+    <meta name="theme-color" content="#667eea">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content header-row">
+                <div class="brand">
+                    <div class="logo" aria-hidden="true">
+                        <!-- Simple SVG mark -->
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="24" height="24" rx="6" fill="#6366f1"/>
+                            <path d="M6 12h12M6 8h12M6 16h8" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="header-main">
+                    <h1>SSEAR</h1>
+                    <p class="subtitle">Sistema Semántico de Evaluación Automatizada de Respuestas</p>
+                </div>
+                <div class="status-indicator">
+                    <span id="modelStatus" class="status-badge loading">Conectando...</span>
+                    <span id="modeIndicator" class="mode-badge">OFFLINE</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="grid">
+                <!-- Panel Izquierdo: Input -->
+                <section class="panel input-panel">
+                    <h2 style="margin-top: 0;">Pregunta</h2>
+                    <textarea 
+                        id="question" 
+                        class="textarea" 
+                        placeholder="Escribe la pregunta para contexto..."
+                        rows="3"></textarea>
+
+                    <h2 style="margin-top: 20px;">Respuesta de Referencia</h2>
+                    <textarea 
+                        id="referenceAnswer" 
+                        class="textarea" 
+                        placeholder="Escribe la respuesta correcta o de referencia aquí..."
+                        rows="6"></textarea>
+                    
+                    <h2 style="margin-top: 20px;">Respuesta del Estudiante</h2>
+                    <textarea 
+                        id="studentAnswer" 
+                        class="textarea" 
+                        placeholder="Escribe la respuesta a evaluar aquí..."
+                        rows="6"></textarea>
+                    
+                    <div class="button-group">
+                        <button id="evaluateBtn" class="btn btn-primary" onclick="evaluateAnswer()">
+                            Evaluar Respuesta
+                        </button>
+                        <button id="clearBtn" class="btn btn-secondary" onclick="clearAll()">
+                            Limpiar
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Panel Derecho: Resultados -->
+                <section class="panel results-panel">
+                    <h2>Resultados del Análisis</h2>
+                    
+                    <!-- Similarity Scores -->
+                    <div id="resultsContainer" class="results-container" style="display: none;">
+                        <div class="score-card">
+                            <div class="score-header">
+                                <span class="score-label">Similitud Semántica</span>
+                                <span id="semanticScore" class="score-value">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="semanticBar" class="progress-fill semantic" style="width: 0%"></div>
+                            </div>
+                            <p class="score-description">Comprensión conceptual y significado</p>
+                        </div>
+
+                        <div class="score-card">
+                            <div class="score-header">
+                                <span class="score-label">Similitud Léxica</span>
+                                <span id="lexicalScore" class="score-value">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="lexicalBar" class="progress-fill lexical" style="width: 0%"></div>
+                            </div>
+                            <p class="score-description">Vocabulario y palabras clave</p>
+                        </div>
+
+                        <div class="score-card highlight">
+                            <div class="score-header">
+                                <span class="score-label">Calificación General</span>
+                                <span id="overallScore" class="score-value grade">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="overallBar" class="progress-fill overall" style="width: 0%"></div>
+                            </div>
+                            <p class="score-description">Evaluación combinada ponderada</p>
+                        </div>
+
+                        <!-- Metadata -->
+                        <div class="metadata">
+                            <div class="meta-item">
+                                <span class="meta-label">Palabras (Referencia):</span>
+                                <span id="refWordCount">0</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Palabras (Estudiante):</span>
+                                <span id="stuWordCount">0</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Coincidencia de Palabras:</span>
+                                <span id="keywordMatch">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="noResults" class="no-results">
+                        <p>Ingresa ambas respuestas y haz clic en "Evaluar"</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Feedback Section -->
+            <section id="feedbackSection" class="feedback-section" style="display: none;">
+                <h2>Retroalimentación Personalizada</h2>
+                
+                <!-- Summary -->
+                <div class="feedback-summary" id="summaryContainer"></div>
+                
+                <!-- Strengths -->
+                <div class="feedback-block">
+                    <h3>Fortalezas</h3>
+                    <div id="strengthsList" class="list-items"></div>
+                </div>
+                
+                <!-- Weaknesses -->
+                <div class="feedback-block">
+                    <h3>Áreas de Mejora</h3>
+                    <div id="weaknessList" class="list-items"></div>
+                </div>
+                
+                <!-- Suggestions -->
+                <div class="feedback-block">
+                    <h3>Sugerencias</h3>
+                    <div id="suggestionsList" class="suggestions-list"></div>
+                </div>
+                
+                <!-- Action Items -->
+                <div class="feedback-block">
+                    <h3>Acciones Recomendadas</h3>
+                    <div id="actionsList" class="actions-list"></div>
+                </div>
+            </section>
+
+            <!-- Details Section -->
+            <section id="detailsSection" class="details-section" style="display: none;">
+                <h2>Análisis Detallado</h2>
+                <div class="details-grid">
+                    <div class="detail-card">
+                        <h3>Términos Encontrados</h3>
+                        <div id="matchedTerms" class="terms-list"></div>
+                    </div>
+                    <div class="detail-card">
+                        <h3>Términos Faltantes</h3>
+                        <div id="missingTerms" class="terms-list"></div>
+                    </div>
+                    <div class="detail-card">
+                        <h3>Términos Extras</h3>
+                        <div id="extraTerms" class="terms-list"></div>
+                    </div>
+                </div>
+
+                <!-- Specific Feedback -->
+                <div class="feedback-block">
+                    <h3>Análisis Específicos</h3>
+                    <div class="specific-feedback" id="specificFeedback"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p class="footer-text">Funciona completamente OFFLINE | Usa modelos IA locales | © 2024 SSEAR</p>
+            <p id="versionInfo" style="font-size: 0.9em; color: #888;"></p>
+        </footer>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Procesando respuestas...</p>
+    </div>
+
+    <!-- Script -->
+    <script src="client.js"></script>
+</body>
+</html>
