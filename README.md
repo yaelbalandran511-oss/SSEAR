@@ -1,191 +1,68 @@
-# SSEAR — Sistema Semántico de Evaluación Automatizada de Respuestas
+# SSEAR — Sistema de Evaluación de Respuestas por Ideas Clave
 
-Proyecto que incluye un backend Flask que sirve la UI estática y las rutas de evaluación (`/api/*`).
+Este proyecto ofrece un sistema que evalúa respuestas de estudiantes en base a ideas clave y similitud léxica.
 
-Objetivo: que cualquier persona pueda clonar y ejecutar el proyecto localmente de forma reproducible.
+## Qué incluye
+- `app.py` — servidor Flask y API de evaluación
+- `index.html`, `styles.css`, `client.js` — interfaz web estática
+- `semantic_analyzer.py` — análisis semántico
+- `lexical_analyzer.py` — análisis léxico
+- `evaluador_respuestas_universal.py` — evaluador offline por ideas clave
+- `setup_models.py` — descarga y preparación de modelos
+- `requirements.txt` — dependencias de Python
 
 ## Requisitos
-- Python 3.10+ (recomendado 3.11)
+- Python 3.10 o superior
 - Git
+- Windows / Linux / macOS
 
-## Pasos (local, Windows PowerShell)
-
-1. Clonar el repo:
+## Instalación rápida
+1. Clona el repositorio:
 ```powershell
 git clone <TU_REPO_URL>
 cd "Proyecto Final TPA Balandrán"
 ```
-
-2. Crear y activar un entorno virtual:
+2. Crea y activa un entorno virtual:
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
-
-3. Instalar dependencias:
+3. Instala las dependencias:
 ```powershell
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-4. Descargar modelos y recursos NLP (script automático):
-```powershell
-python setup_models.py
-```
-
-5. Ejecutar el servidor:
+## Ejecución
+### Ejecutar el servidor web
 ```powershell
 python app.py
 ```
-Abre el navegador en `http://127.0.0.1:5000`.
+Luego abre `http://127.0.0.1:5000`.
 
-## Docker (opcional — reproduce sin preocuparte por Python/venv)
-
-1. Construir y ejecutar con Docker Compose:
-```bash
-docker compose up --build
+### Ejecutar el evaluador universal por ideas clave
+```powershell
+python evaluador_respuestas_universal.py
 ```
-2. Abrir `http://127.0.0.1:5000`.
+Este script ofrece ejemplo precargado, modo interactivo y modo múltiple.
+
+## Uso básico
+- Opción 1: ejemplo precargado con la pregunta de "Tierra habitable"
+- Opción 2: ingresar pregunta, referencia, ideas clave y respuesta manualmente
+- Opción 3: evaluar varias respuestas de estudiantes para la misma pregunta
+
+## Resultado esperado
+Cada evaluación muestra:
+- Semántica (ideas clave) en %
+- Léxica en % con fórmula correcta
+- Calificación final en %
+- Nota sobre 10
+- Ideas encontradas ✅
+- Ideas faltantes ❌
+- Errores detectados ⚠️
+- Coincidencia de palabras
 
 ## Notas
-
-## Solución de problemas
-
-Si quieres, puedo añadir CI/CD básico o un instalador más sencillo. Dime qué prefieres.
-
-1. Inicializa el repositorio (si aún no lo has hecho):
-```bash
-git init
-git add .
-git commit -m "Initial commit: SSEAR project prepared for sharing"
-```
-
-2. Crea un nuevo repositorio en GitHub (a través de la web) y añádelo como remoto:
-```bash
-git remote add origin https://github.com/<tu-usuario>/<repo>.git
-git branch -M main
-git push -u origin main
-```
-
-Alternativamente, usa GitHub CLI (`gh repo create`) para crear y subir en un solo comando.
-
-Asegúrate de no comprometer archivos de modelo grandes o tu directorio `venv`; `.gitignore` ya excluye elementos comunes.
-
-
-## Qu� es SSEAR
-
-SSEAR es un sistema offline que eval�a respuestas abiertas comparando:
-- la **similitud sem�ntica** entre respuesta de referencia y respuesta del estudiante
-- la **similitud l�xica** mediante an�lisis de vocabulario y palabras clave
-
-El objetivo es ofrecer una evaluaci�n educativa m�s justa y una retroalimentaci�n �til.
-
-## Qu� incluye este proyecto
-
-- `app.py` - servidor Flask con endpoints REST
-- `semantic_analyzer.py` - an�lisis sem�ntico con transformers
-- `lexical_analyzer.py` - an�lisis l�xico con NLTK y tokenizaci�n
-- `feedback_generator.py` - genera retroalimentaci�n automatizada
-- `index.html`, `styles.css`, `client.js` - interfaz web
-- `requirements.txt` - dependencias de Python
-
-## Requisitos
-
-- Python 3.8 o superior
-- `pip`
-- Espacio libre: al menos 1 GB para descargar modelos
-
-## Instalaci�n y ejecuci�n
-
-1. Abre una terminal en la carpeta del proyecto.
-2. Crea y activa un entorno virtual (recomendado):
-
-```powershell
-python -m venv venv
-venv\Scripts\Activate.ps1
-```
-
-3. Instala las dependencias:
-
-```powershell
-pip install -r requirements.txt
-```
-
-4. Ejecuta el servidor:
-
-```powershell
-python app.py
-```
-
-5. Abre el navegador en:
-
-```text
-http://localhost:5000
-```
-
-## Uso
-
-1. Completa el campo **Pregunta**.
-2. Pega la **Respuesta de Referencia**.
-3. Pega la **Respuesta del Estudiante**.
-4. Haz clic en **Evaluar Respuesta**.
-
-El sistema mostrar�:
-- puntuaciones sem�ntica y l�xica
-- calificaci�n general
-- retroalimentaci�n detallada
-- t�rminos encontrados y faltantes
-
-## API
-
-### POST `/api/evaluate`
-
-Request JSON:
-
-```json
-{
-  "reference_answer": "...",
-  "student_answer": "...",
-  "question": "...",
-  "context": "..."
-}
-```
-
-Response JSON incluye:
-- `scores` con `semantic`, `lexical`, `overall` y `grade`
-- `feedback` con sugerencias y fortalezas
-- `metadata` con t�rminos coincidentes y faltantes
-
-### POST `/api/batch-evaluate`
-
-Request JSON:
-
-```json
-{
-  "evaluations": [
-    {
-      "reference_answer": "...",
-      "student_answer": "...",
-      "question": "..."
-    }
-  ]
-}
-```
-
-### GET `/api/health`
-
-Devuelve estado del servidor.
-
-### GET `/api/models-info`
-
-Devuelve informaci�n de los modelos.
-
-## Buenas pr�cticas
-
-- Mant�n la referencia clara y completa.
-- Evita respuestas demasiado cortas.
-- Usa `question` para dar contexto.
-
-## Archivos simples y �tiles
-
-Este proyecto se mantiene con los archivos necesarios para ejecutar SSEAR y la documentaci�n principal en `README.md`.
+- El evaluador universal es autocontenido y no requiere librerías externas adicionales.
+- El sistema Flask requiere instalación de dependencias desde `requirements.txt`.
+- Para una copia rápida, usa `git clone` y ejecuta `python evaluador_respuestas_universal.py`.

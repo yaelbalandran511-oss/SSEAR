@@ -15,8 +15,8 @@ SEMANTIC_MODEL = 'distiluse-base-multilingual-cased-v2'
 LEXICAL_LANGUAGE = 'spanish'
 
 # Ponderación de puntuaciones (deben sumar 1.0)
-SEMANTIC_WEIGHT = 0.6
-LEXICAL_WEIGHT = 0.4
+SEMANTIC_WEIGHT = 0.75
+LEXICAL_WEIGHT = 0.25
 
 # Configuración de validación
 MIN_REFERENCE_LENGTH = 10  # Caracteres mínimos en respuesta de referencia

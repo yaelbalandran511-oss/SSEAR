@@ -5,7 +5,6 @@ Backend Principal - Flask Server
 
 import os
 import json
-import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
@@ -13,8 +12,10 @@ import webbrowser
 import threading
 import logging
 
+import config
+
 # Importar módulos de análisis
-from semantic_analyzer import SemanticAnalyzer
+from concept_analyzer import ConceptAnalyzer
 from lexical_analyzer import LexicalAnalyzer
 from feedback_generator import FeedbackGenerator
 
@@ -35,7 +36,7 @@ def index():
 
 # Inicializar analizadores
 logger.info("Cargando modelos de IA...")
-semantic_analyzer = SemanticAnalyzer()
+concept_analyzer = ConceptAnalyzer()
 lexical_analyzer = LexicalAnalyzer()
 feedback_generator = FeedbackGenerator()
 logger.info("Modelos cargados exitosamente")
@@ -90,7 +91,7 @@ def evaluate_answer():
         logger.info(f"Evaluando respuesta: {student[:50]}...")
         
         # ========== ANÁLISIS SEMÁNTICO ==========
-        semantic_results = semantic_analyzer.analyze(reference, student)
+        semantic_results = concept_analyzer.analyze(question, reference, student)
         
         # ========== ANÁLISIS LÉXICO ==========
         lexical_results = lexical_analyzer.analyze(reference, student)
@@ -99,8 +100,8 @@ def evaluate_answer():
         semantic_score = semantic_results['similarity']
         lexical_score = lexical_results['similarity']
         
-        # Promedio ponderado más flexible (80% semántico, 20% léxico)
-        overall_score = (semantic_score * 0.8) + (lexical_score * 0.2)
+        # Promedio ponderado estándar: 70% semántica + 30% léxica
+        overall_score = (semantic_score * config.SEMANTIC_WEIGHT) + (lexical_score * config.LEXICAL_WEIGHT)
         
         # ========== GENERACIÓN DE RETROALIMENTACIÓN ==========
         feedback = feedback_generator.generate(
@@ -120,7 +121,8 @@ def evaluate_answer():
                 'semantic': round(semantic_score * 100, 2),
                 'lexical': round(lexical_score * 100, 2),
                 'overall': round(overall_score * 100, 2),
-                'grade': get_grade(overall_score)
+                'grade': round(overall_score * 10, 1),
+                'grade_letter': get_grade_letter(overall_score)
             },
             'analysis': {
                 'semantic': semantic_results,
@@ -176,7 +178,8 @@ def batch_evaluate():
             if not request_data['reference_answer'] or not request_data['student_answer'] or not request_data['question']:
                 return jsonify({'error': f'El elemento {idx} del lote debe incluir reference_answer, student_answer y question'}), 400
 
-            semantic_results = semantic_analyzer.analyze(
+            semantic_results = concept_analyzer.analyze(
+                request_data['question'],
                 request_data['reference_answer'],
                 request_data['student_answer']
             )
@@ -187,7 +190,7 @@ def batch_evaluate():
 
             semantic_score = semantic_results['similarity']
             lexical_score = lexical_results['similarity']
-            overall_score = (semantic_score * 0.7) + (lexical_score * 0.3)
+            overall_score = (semantic_score * config.SEMANTIC_WEIGHT) + (lexical_score * config.LEXICAL_WEIGHT)
 
             results.append({
                 'student_answer': request_data['student_answer'],
@@ -195,7 +198,8 @@ def batch_evaluate():
                     'semantic': round(semantic_score * 100, 2),
                     'lexical': round(lexical_score * 100, 2),
                     'overall': round(overall_score * 100, 2),
-                    'grade': get_grade(overall_score)
+                    'grade': round(overall_score * 10, 1),
+                    'grade_letter': get_grade_letter(overall_score)
                 }
             })
         
@@ -232,18 +236,17 @@ def models_info():
     }), 200
 
 
+def get_grade_letter(score):
+    """Convierte puntuación en rango 0-1 a calificación letra"""
+    for letter, threshold in config.GRADE_THRESHOLDS.items():
+        if score >= threshold:
+            return letter
+    return 'F'
+
+
 def get_grade(score):
-    """Convierte puntuación a calificación letra"""
-    if score >= 0.88:
-        return 'A'
-    elif score >= 0.75:
-        return 'B'
-    elif score >= 0.60:
-        return 'C'
-    elif score >= 0.45:
-        return 'D'
-    else:
-        return 'F'
+    """Convierte puntuación en rango 0-1 a calificación numérica 0-10"""
+    return round(score * 10, 1)
 
 
 if __name__ == '__main__':

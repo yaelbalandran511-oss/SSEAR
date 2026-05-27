@@ -30,6 +30,19 @@ class LexicalAnalyzer:
                 self.stemmer = None
         else:
             self.stemmer = None
+
+        try:
+            from nltk.corpus import stopwords
+            self.stop_words = set(stopwords.words('spanish'))
+        except Exception:
+            # Lista de stopwords españolas básica como fallback
+            self.stop_words = {
+                'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas',
+                'y', 'o', 'pero', 'que', 'de', 'del', 'al', 'en', 'por',
+                'con', 'sin', 'para', 'se', 'es', 'su', 'sus', 'como',
+                'más', 'muy', 'a', 'al', 'lo', 'le', 'les'
+            }
+
         logger.info("Analizador léxico inicializado")
     
     def analyze(self, reference_text, student_text):
@@ -121,20 +134,15 @@ class LexicalAnalyzer:
         return keywords
     
     def _calculate_similarity(self, tokens1, tokens2):
-        """Calcula similitud léxica usando Jaccard, cobertura y coincidencia flexible"""
-        set1 = set(tokens1)
-        set2 = set(tokens2)
-        
-        if not set1 or not set2:
+        """Calcula similitud léxica usando la fórmula estándar de cobertura de palabras.
+
+        similitud = (2 * palabras_comunes) / (total_tokens_ref + total_tokens_est)
+        """
+        if not tokens1 or not tokens2:
             return 0.0
-        
-        intersection = len(set1 & set2)
-        union = len(set1 | set2)
-        coverage = intersection / min(len(set1), len(set2)) if min(len(set1), len(set2)) > 0 else 0
-        jaccard = intersection / union if union > 0 else 0
-        fuzzy = self._fuzzy_token_similarity(set1, set2)
-        
-        return min(1.0, max(jaccard, coverage * 0.9, fuzzy * 0.9))
+
+        common = sum((Counter(tokens1) & Counter(tokens2)).values())
+        return (2 * common) / (len(tokens1) + len(tokens2))
     
     def _fuzzy_token_similarity(self, tokens1, tokens2):
         """Calcula similaridad aproximada entre tokens"""
