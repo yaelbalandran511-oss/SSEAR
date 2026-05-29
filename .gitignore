@@ -3,26 +3,40 @@ venv/
 venv_nuevo/
 venv311/
 ENV/
+env/
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
 
-# Modelos (se descargan automáticamente)
+# Modelos descargados automáticamente
 models/
 
 # Logs
 logs/
 *.log
 
+# Variables de entorno
+.env
+.env.*
+
 # Archivos del sistema
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDEs / editores
 .vscode/
 .idea/
+*.sublime-workspace
+*.sublime-project
 
 # Resultados exportados
 ssear-results-*.json
+
+# Docker
+docker-data/
