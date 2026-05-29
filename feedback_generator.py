@@ -1,320 +1,162 @@
 """
-Generador de Retroalimentación - Crea feedback personalizado automático
+Generador de Retroalimentación - SSEAR
 """
 
 import logging
-import json
+import config
 
 logger = logging.getLogger(__name__)
 
 
 class FeedbackGenerator:
-    """Genera retroalimentación automática personalizada"""
-    
     def __init__(self):
-        """Inicializa generador de retroalimentación"""
-        self.templates = self._load_templates()
         logger.info("Generador de retroalimentación inicializado")
-    
-    def generate(self, reference_answer, student_answer, semantic_results, 
-                 lexical_results, overall_score, question=""):
-        """
-        Genera retroalimentación personalizada
-        
-        Args:
-            reference_answer (str): Respuesta de referencia
-            student_answer (str): Respuesta del estudiante
-            semantic_results (dict): Resultados semánticos
-            lexical_results (dict): Resultados léxicos
-            overall_score (float): Puntuación general (0-1)
-            question (str): Pregunta original (opcional)
-        
-        Returns:
-            dict: Retroalimentación estructurada
-        """
-        feedback = {
-            'summary': self._generate_summary(overall_score),
-            'strengths': self._identify_strengths(semantic_results, lexical_results),
-            'weaknesses': self._identify_weaknesses(semantic_results, lexical_results),
-            'suggestions': self._generate_suggestions(
-                reference_answer, 
-                student_answer,
-                semantic_results,
-                lexical_results,
-                overall_score
-            ),
-            'specific_feedback': self._generate_specific_feedback(
-                semantic_results,
-                lexical_results
-            ),
-            'action_items': self._generate_action_items(
-                semantic_results,
-                lexical_results,
-                reference_answer
-            )
-        }
-        
-        return feedback
-    
-    def _generate_summary(self, score):
-        """Genera resumen general basado en puntuación"""
-        if score >= 0.9:
-            return {
-                'rating': 'Excelente',
-                'message': '¡Respuesta excepcional! Demuestra comprensión profunda del tema.',
-                'emoji': ''
-            }
-        elif score >= 0.8:
-            return {
-                'rating': 'Muy Bien',
-                'message': 'Muy buena respuesta con elementos clave correctos.',
-                'emoji': ''
-            }
-        elif score >= 0.7:
-            return {
-                'rating': 'Bien',
-                'message': 'Respuesta satisfactoria pero con áreas de mejora.',
-                'emoji': ''
-            }
-        elif score >= 0.6:
-            return {
-                'rating': 'Aceptable',
-                'message': 'Respuesta básica que necesita más detalle y precisión.',
-                'emoji': ''
-            }
-        elif score >= 0.5:
-            return {
-                'rating': 'Necesita Mejora',
-                'message': 'Respuesta incompleta, revisa los conceptos principales.',
-                'emoji': ''
-            }
-        else:
-            return {
-                'rating': 'Insuficiente',
-                'message': 'La respuesta requiere revisión significativa.',
-                'emoji': ''
-            }
-    
-    def _identify_strengths(self, semantic_results, lexical_results):
-        """Identifica fortalezas de la respuesta"""
+
+    def generate(self, evaluation_result: dict) -> dict:
+        scores   = evaluation_result.get('scores', {})
+        metadata = evaluation_result.get('metadata', {})
+        analysis = evaluation_result.get('analysis', {})
+
+        percentage     = scores.get('percentage', 0)
+        grade          = scores.get('grade', 'F')
+        semantic_score = scores.get('semantic', 0)
+        lexical_score  = scores.get('lexical', 0)
+
+        # ✅ CORREGIDO: leer directamente de metadata
+        matched_terms = metadata.get('matched_terms', [])
+        missing_terms = metadata.get('missing_terms', [])
+        extra_terms   = metadata.get('extra_terms', [])
+        term_coverage = metadata.get('term_coverage', 'N/A')
+
+        # Resumen
+        label         = config.GRADE_LABELS.get(grade, 'Insuficiente')
+        message       = self._get_message(percentage)
+        encouragement = self._get_encouragement(percentage)
+
+        # Fortalezas
         strengths = []
-        
-        semantic_sim = semantic_results.get('similarity', 0)
-        lexical_sim = lexical_results.get('similarity', 0)
-        
-        if semantic_sim >= 0.7:
-            strengths.append({
-                'title': 'Comprensión Conceptual',
-                'description': 'Demuestra buen entendimiento semántico del tema',
-                'score': round(semantic_sim * 100, 1)
-            })
-        
-        if lexical_sim >= 0.7:
-            strengths.append({
-                'title': 'Vocabulario Apropiado',
-                'description': 'Utiliza términos clave relevantes correctamente',
-                'score': round(lexical_sim * 100, 1)
-            })
-        
-        matched_terms = lexical_results.get('matched_terms', [])
-        if matched_terms and len(matched_terms) >= 5:
-            strengths.append({
-                'title': 'Cobertura de Términos Clave',
-                'description': f'Incluye {len(matched_terms)} términos clave importantes',
-                'score': min(100, len(matched_terms) * 10)
-            })
-        
+        if semantic_score >= 0.7:
+            strengths.append("Buena comprensión conceptual del tema.")
+        if lexical_score >= 0.5:
+            strengths.append("Vocabulario técnico adecuado.")
+        if matched_terms:
+            strengths.append(f"Términos clave identificados: {', '.join(matched_terms[:5])}.")
         if not strengths:
-            strengths.append({
-                'title': 'Esfuerzo Inicial',
-                'description': 'Has intentado abordar la pregunta',
-                'score': 50
-            })
-        
-        return strengths
-    
-    def _identify_weaknesses(self, semantic_results, lexical_results):
-        """Identifica debilidades de la respuesta"""
+            strengths.append("La respuesta aborda el tema solicitado.")
+
+        # Debilidades
         weaknesses = []
-        
-        semantic_sim = semantic_results.get('similarity', 0)
-        lexical_sim = lexical_results.get('similarity', 0)
-        
-        if semantic_sim < 0.7:
-            weaknesses.append({
-                'title': 'Claridad Conceptual',
-                'description': 'La respuesta no captura completamente los conceptos principales',
-                'score': round(semantic_sim * 100, 1),
-                'severity': 'alta' if semantic_sim < 0.5 else 'media'
-            })
-        
-        if lexical_sim < 0.7:
-            weaknesses.append({
-                'title': 'Precisión en Vocabulario',
-                'description': 'Faltan términos clave o hay imprecisión en el lenguaje',
-                'score': round(lexical_sim * 100, 1),
-                'severity': 'alta' if lexical_sim < 0.5 else 'media'
-            })
-        
-        missing_terms = lexical_results.get('missing_terms', [])
+        if semantic_score < 0.5:
+            weaknesses.append("La comprensión semántica del tema es baja.")
+        if lexical_score < 0.4:
+            weaknesses.append("Falta vocabulario técnico específico.")
         if missing_terms:
-            weaknesses.append({
-                'title': 'Términos Faltantes',
-                'description': f'No menciona {len(missing_terms)} términos importantes',
-                'count': len(missing_terms),
-                'severity': 'media' if len(missing_terms) <= 5 else 'alta'
-            })
-        
+            weaknesses.append(f"Términos importantes no mencionados: {', '.join(missing_terms[:5])}.")
         if not weaknesses:
-            weaknesses.append({
-                'title': 'Sin Debilidades Significativas',
-                'description': 'La respuesta es completa y precisa',
-                'score': 100
-            })
-        
-        return weaknesses
-    
-    def _generate_suggestions(self, reference, student, semantic_results, 
-                            lexical_results, overall_score):
-        """Genera sugerencias de mejora"""
-        suggestions = []
-        
-        # Sugerencia 1: Términos faltantes
-        missing_terms = lexical_results.get('missing_terms', [])
-        if missing_terms:
-            suggestions.append({
-                'type': 'vocabulary',
-                'title': 'Incluye Términos Clave Faltantes',
-                'description': f'Considera agregar: {", ".join(missing_terms[:5])}',
-                'priority': 'alta'
-            })
-        
-        # Sugerencia 2: Ampliar explicación
-        if semantic_results.get('similarity', 0) < 0.8:
-            suggestions.append({
-                'type': 'expansion',
-                'title': 'Amplía tu Explicación',
-                'description': 'La respuesta necesita más detalles y ejemplos para claridad conceptual',
-                'priority': 'alta'
-            })
-        
-        # Sugerencia 3: Precisión
-        if lexical_results.get('similarity', 0) < 0.7:
-            suggestions.append({
-                'type': 'precision',
-                'title': 'Sé más Preciso en la Terminología',
-                'description': 'Revisa las palabras utilizadas para asegurar que sean técnicamente correctas',
-                'priority': 'media'
-            })
-        
-        # Sugerencia 4: Estructura
-        ref_len = semantic_results.get('reference_tokens', 0)
-        stu_len = semantic_results.get('student_tokens', 0)
-        
-        if stu_len < ref_len * 0.5:
-            suggestions.append({
-                'type': 'structure',
-                'title': 'Desarrolla Más tu Respuesta',
-                'description': f'Tu respuesta es muy corta ({stu_len} palabras vs {ref_len} esperadas)',
-                'priority': 'media'
-            })
-        
-        # Sugerencia 5: Ejemplos
-        if overall_score < 0.8 and semantic_results.get('similarity', 0) < 0.75:
-            suggestions.append({
-                'type': 'examples',
-                'title': 'Añade Ejemplos Concretos',
-                'description': 'Los ejemplos específicos ayudan a clarificar conceptos complejos',
-                'priority': 'media'
-            })
-        
-        if not suggestions:
-            suggestions.append({
-                'type': 'excellence',
-                'title': 'Mantén tu Nivel de Excelencia',
-                'description': 'Tu respuesta es muy buena, continúa así',
-                'priority': 'baja'
-            })
-        
-        return suggestions
-    
-    def _generate_specific_feedback(self, semantic_results, lexical_results):
-        """Genera feedback específico por categoría"""
-        return {
-            'semantic_analysis': {
-                'score': round(semantic_results.get('similarity', 0) * 100, 1),
-                'message': self._get_semantic_message(semantic_results.get('similarity', 0)),
-                'details': f"Similitud de tokens: {semantic_results.get('token_overlap', 0) * 100:.1f}%"
+            weaknesses.append("Continúa profundizando en los conceptos avanzados.")
+
+        # Desglose
+        sem_pct = round(semantic_score * 100, 1)
+        lex_pct = round(lexical_score * 100, 1)
+        analysis_breakdown = {
+            'semantic': {
+                'score':          sem_pct,
+                'weight':         f"{int(config.SEMANTIC_WEIGHT * 100)}%",
+                'interpretation': self._interpret_score(sem_pct)
             },
-            'lexical_analysis': {
-                'score': round(lexical_results.get('similarity', 0) * 100, 1),
-                'message': self._get_lexical_message(lexical_results.get('similarity', 0)),
-                'details': f"Diversidad lexical: {lexical_results.get('lexical_diversity', 0) * 100:.1f}%"
+            'lexical': {
+                'score':          lex_pct,
+                'weight':         f"{int(config.LEXICAL_WEIGHT * 100)}%",
+                'interpretation': self._interpret_score(lex_pct)
             }
         }
-    
-    def _get_semantic_message(self, score):
-        """Mensaje según puntuación semántica"""
-        if score >= 0.85:
-            return "Comprensión excepcional de conceptos"
-        elif score >= 0.70:
-            return "Buena comprensión conceptual"
-        elif score >= 0.50:
-            return "Comprensión parcial de conceptos"
-        else:
-            return "Necesitas revisar los conceptos principales"
-    
-    def _get_lexical_message(self, score):
-        """Mensaje según puntuación léxica"""
-        if score >= 0.85:
-            return "Excelente uso de vocabulario técnico"
-        elif score >= 0.70:
-            return "Buen uso de términos clave"
-        elif score >= 0.50:
-            return "Vocabulario parcialmente apropiado"
-        else:
-            return "Necesitas mejorar la precisión en el vocabulario"
-    
-    def _generate_action_items(self, semantic_results, lexical_results, reference):
-        """Genera lista de acciones a tomar"""
+
+        # Acciones
+        action_items = self._get_action_items(percentage, missing_terms)
+
+        # ✅ CORREGIDO: análisis detallado con scores reales
+        detailed_analysis = {
+            'matched_terms':  matched_terms,
+            'missing_terms':  missing_terms,
+            'extra_terms':    extra_terms,
+            'term_coverage':  term_coverage,
+            'semantic_score': sem_pct,
+            'lexical_score':  lex_pct
+        }
+
+        return {
+            'summary': {
+                'grade':         grade,
+                'label':         label,
+                'percentage':    round(percentage, 2),
+                'message':       message,
+                'encouragement': encouragement
+            },
+            'strengths':          strengths,
+            'weaknesses':         weaknesses,
+            'analysis_breakdown': analysis_breakdown,
+            'action_items':       action_items,
+            'detailed_analysis':  detailed_analysis,
+            'specific_feedback':  self._specific_feedback(percentage, matched_terms, missing_terms)
+        }
+
+    def _get_message(self, pct: float) -> str:
+        if pct >= 85: return config.FEEDBACK_MESSAGES['excellent']
+        if pct >= 70: return config.FEEDBACK_MESSAGES['very_good']
+        if pct >= 55: return config.FEEDBACK_MESSAGES['good']
+        if pct >= 40: return config.FEEDBACK_MESSAGES['acceptable']
+        if pct >= 20: return config.FEEDBACK_MESSAGES['needs_improvement']
+        return config.FEEDBACK_MESSAGES['insufficient']
+
+    def _get_encouragement(self, pct: float) -> str:
+        if pct >= 85: return "¡Excelente trabajo! Sigue así."
+        if pct >= 70: return "¡Buen trabajo! Con un poco más de detalle llegarás al nivel excelente."
+        if pct >= 55: return "Vas por buen camino. Profundiza en los conceptos clave."
+        if pct >= 40: return "Tienes la base. Trabaja en completar tu respuesta con más detalle."
+        return "No te desanimes. Revisa el material y vuelve a intentarlo."
+
+    def _interpret_score(self, pct: float) -> str:
+        if pct >= 80: return "Muy bueno"
+        if pct >= 60: return "Aceptable"
+        if pct >= 40: return "Regular"
+        return "Bajo"
+
+    def _get_action_items(self, pct: float, missing_terms: list) -> list:
         actions = []
-        
-        missing_terms = lexical_results.get('missing_terms', [])
         if missing_terms:
             actions.append({
-                'priority': 1,
-                'action': f'Revisa y aprende los siguientes términos: {", ".join(missing_terms[:3])}',
-                'category': 'vocabulario'
+                'priority': 'alta',
+                'action':   f"Incluye los conceptos: {', '.join(missing_terms[:4])}.",
+                'resource': 'Notas de clase o libro de texto'
             })
-        
-        if semantic_results.get('similarity', 0) < 0.7:
+        if pct < 55:
             actions.append({
-                'priority': 1,
-                'action': 'Relee la pregunta y el material de referencia para mejor comprensión',
-                'category': 'conceptos'
+                'priority': 'alta',
+                'action':   'Revisa el tema completo antes de la evaluación.',
+                'resource': 'Material del curso'
             })
-        
-        if lexical_results.get('similarity', 0) < 0.7:
+        if pct < 70:
             actions.append({
-                'priority': 2,
-                'action': 'Reformula tu respuesta usando terminología más precisa',
-                'category': 'redacción'
+                'priority': 'media',
+                'action':   'Elabora más tus respuestas con ejemplos y detalles.',
+                'resource': ''
             })
-        
         if not actions:
             actions.append({
-                'priority': 3,
-                'action': 'Excelente trabajo, mantén este nivel de calidad',
-                'category': 'mantenimiento'
+                'priority': 'baja',
+                'action':   'Continúa practicando para mantener el nivel.',
+                'resource': ''
             })
-        
-        return sorted(actions, key=lambda x: x['priority'])
-    
-    def _load_templates(self):
-        """Carga templates de retroalimentación"""
-        return {
-            'excellent': 'Tu respuesta es excepcional y demuestra comprensión profunda.',
-            'good': 'Tu respuesta es buena con elementos clave correctos.',
-            'satisfactory': 'Tu respuesta es satisfactoria pero puede mejorarse.',
-            'needs_improvement': 'Tu respuesta necesita revisión y mejora significativa.'
-        }
+        return actions
+
+    def _specific_feedback(self, pct: float, matched: list, missing: list) -> list:
+        fb = []
+        if matched:
+            fb.append(f"✅ Conceptos correctos: {', '.join(matched[:5])}.")
+        if missing:
+            fb.append(f"❌ Conceptos faltantes: {', '.join(missing[:5])}.")
+        if pct >= 70:
+            fb.append("📚 Respuesta que demuestra comprensión del tema.")
+        else:
+            fb.append("📖 Se recomienda repasar el tema para completar la respuesta.")
+        return fb

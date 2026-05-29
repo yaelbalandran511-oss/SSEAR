@@ -1,238 +1,156 @@
 """
-Utilidades - Funciones auxiliares para SSEAR
+Utilidades - SSEAR
+Funciones auxiliares para normalización, validación y monitoreo
 """
 
 import re
 import logging
-import hashlib
-import json
-from typing import List, Dict, Tuple
+import unicodedata
+from typing import Optional, Dict, Tuple, List
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
-class TextCleaner:
-    """Limpia y normaliza texto"""
-    
-    @staticmethod
-    def clean(text: str) -> str:
-        """Limpia texto removiendo caracteres especiales"""
-        # Convertir a minúsculas
-        text = text.lower()
-        # Remover caracteres especiales pero mantener espacios
-        text = re.sub(r'[^\w\s\-\.]', ' ', text)
-        # Remover espacios múltiples
-        text = re.sub(r'\s+', ' ', text)
-        return text.strip()
-    
-    @staticmethod
-    def normalize_whitespace(text: str) -> str:
-        """Normaliza espacios en blanco"""
-        return re.sub(r'\s+', ' ', text).strip()
-    
-    @staticmethod
-    def remove_urls(text: str) -> str:
-        """Remueve URLs del texto"""
-        return re.sub(r'https?://\S+', '', text)
-    
-    @staticmethod
-    def remove_emails(text: str) -> str:
-        """Remueve emails del texto"""
-        return re.sub(r'\S+@\S+', '', text)
-    
-    @staticmethod
-    def remove_extra_punctuation(text: str) -> str:
-        """Remueve puntuación extra"""
-        return re.sub(r'[!?\.]{2,}', '.', text)
+# ============================================================
+# FUNCIONES GLOBALES
+# ============================================================
+
+def normalize_text(text: str) -> str:
+    """
+    Normaliza texto para análisis.
+
+    Args:
+        text: Texto a normalizar
+
+    Returns:
+        Texto normalizado (minúsculas, sin acentos ni puntuación especial)
+    """
+    if not text:
+        return ""
+
+    text = text.lower()
+
+    text = ''.join(
+        c for c in unicodedata.normalize('NFD', text)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+    text = re.sub(r'[^\w\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+
+    return text.strip()
 
 
-class TextStatistics:
-    """Calcula estadísticas del texto"""
-    
-    @staticmethod
-    def word_count(text: str) -> int:
-        """Cuenta palabras"""
-        return len(text.split())
-    
-    @staticmethod
-    def char_count(text: str) -> int:
-        """Cuenta caracteres"""
-        return len(text)
-    
-    @staticmethod
-    def sentence_count(text: str) -> int:
-        """Cuenta oraciones"""
-        return len(re.split(r'[.!?]+', text))
-    
-    @staticmethod
-    def avg_word_length(text: str) -> float:
-        """Promedio de longitud de palabras"""
-        words = text.split()
-        if not words:
-            return 0
-        return sum(len(w) for w in words) / len(words)
-    
-    @staticmethod
-    def get_statistics(text: str) -> Dict:
-        """Retorna estadísticas completas del texto"""
-        return {
-            'word_count': TextStatistics.word_count(text),
-            'char_count': TextStatistics.char_count(text),
-            'sentence_count': TextStatistics.sentence_count(text),
-            'avg_word_length': round(TextStatistics.avg_word_length(text), 2),
-            'unique_words': len(set(text.lower().split()))
-        }
+def validate_input(reference: str, student: str, question: str = "") -> Optional[str]:
+    """
+    Valida entrada para evaluación.
+
+    Args:
+        reference: Respuesta de referencia
+        student:   Respuesta del estudiante
+        question:  Pregunta (opcional)
+
+    Returns:
+        None si es válido, mensaje de error si no
+    """
+    import config
+
+    if not reference or not isinstance(reference, str):
+        return "Respuesta de referencia inválida"
+
+    reference = reference.strip()
+    if len(reference) < config.MIN_REFERENCE_LENGTH:
+        return f"Respuesta de referencia debe tener al menos {config.MIN_REFERENCE_LENGTH} caracteres"
+
+    if len(reference) > config.MAX_RESPONSE_LENGTH:
+        return f"Respuesta de referencia no debe exceder {config.MAX_RESPONSE_LENGTH} caracteres"
+
+    if not student or not isinstance(student, str):
+        return "Respuesta del estudiante inválida"
+
+    student = student.strip()
+    if len(student) < config.MIN_STUDENT_LENGTH:
+        return f"Respuesta del estudiante debe tener al menos {config.MIN_STUDENT_LENGTH} caracteres"
+
+    if len(student) > config.MAX_RESPONSE_LENGTH:
+        return f"Respuesta del estudiante no debe exceder {config.MAX_RESPONSE_LENGTH} caracteres"
+
+    if question and isinstance(question, str):
+        if len(question.strip()) > config.MAX_RESPONSE_LENGTH:
+            return "Pregunta es demasiado larga"
+
+    return None
 
 
-class SimilarityUtils:
-    """Utilidades para cálculos de similitud"""
-    
-    @staticmethod
-    def jaccard_similarity(set1: set, set2: set) -> float:
-        """Calcula similitud de Jaccard"""
-        if not set1 or not set2:
-            return 0.0
-        intersection = len(set1 & set2)
-        union = len(set1 | set2)
-        return intersection / union if union > 0 else 0.0
-    
-    @staticmethod
-    def dice_similarity(set1: set, set2: set) -> float:
-        """Calcula similitud de Dice"""
-        if not set1 or not set2:
-            return 0.0
-        intersection = len(set1 & set2)
-        return (2 * intersection) / (len(set1) + len(set2))
-    
-    @staticmethod
-    def overlap_coefficient(set1: set, set2: set) -> float:
-        """Calcula coeficiente de solapamiento"""
-        if not set1 or not set2:
-            return 0.0
-        intersection = len(set1 & set2)
-        return intersection / min(len(set1), len(set2))
-    
-    @staticmethod
-    def levenshtein_ratio(str1: str, str2: str) -> float:
-        """Calcula ratio de Levenshtein (0-1)"""
-        from difflib import SequenceMatcher
-        return SequenceMatcher(None, str1, str2).ratio()
-
+# ============================================================
+# CLASES DE UTILIDAD
+# ============================================================
 
 class CacheManager:
-    """Gestor de caché simple"""
-    
+    """Maneja caché en memoria"""
+
     def __init__(self, max_size: int = 1000):
-        self.cache: Dict = {}
+        self._cache: Dict = {}
         self.max_size = max_size
-    
-    def get_key(self, reference: str, student: str) -> str:
-        """Genera clave de caché"""
-        combined = f"{reference}||{student}"
-        return hashlib.md5(combined.encode()).hexdigest()
-    
+        self.hits   = 0
+        self.misses = 0
+
     def get(self, key: str):
-        """Obtiene valor del caché"""
-        return self.cache.get(key)
-    
-    def set(self, key: str, value):
-        """Guarda valor en caché"""
-        if len(self.cache) >= self.max_size:
-            # Remover primer elemento (FIFO)
-            self.cache.pop(next(iter(self.cache)))
-        self.cache[key] = {
-            'value': value,
-            'timestamp': datetime.now().isoformat()
-        }
-    
+        val = self._cache.get(key)
+        if val is not None:
+            self.hits += 1
+        else:
+            self.misses += 1
+        return val
+
+    def set(self, key: str, value) -> None:
+        if len(self._cache) >= self.max_size:
+            oldest = next(iter(self._cache))
+            del self._cache[oldest]
+        self._cache[key] = value
+
     def clear(self):
-        """Limpia caché"""
-        self.cache.clear()
-    
-    def size(self) -> int:
-        """Retorna tamaño del caché"""
-        return len(self.cache)
+        self._cache.clear()
+        self.hits   = 0
+        self.misses = 0
 
-
-class ResultsExporter:
-    """Exporta resultados en diferentes formatos"""
-    
-    @staticmethod
-    def to_json(data: Dict) -> str:
-        """Exporta a JSON"""
-        return json.dumps(data, indent=2, ensure_ascii=False)
-    
-    @staticmethod
-    def to_csv(results: List[Dict]) -> str:
-        """Exporta múltiples resultados a CSV"""
-        if not results:
-            return ""
-        
-        import csv
-        from io import StringIO
-        
-        output = StringIO()
-        writer = csv.DictWriter(output, fieldnames=[
-            'student_answer',
-            'semantic_score',
-            'lexical_score',
-            'overall_score',
-            'grade'
-        ])
-        
-        writer.writeheader()
-        for result in results:
-            writer.writerow({
-                'student_answer': result.get('student_answer', '')[:50],
-                'semantic_score': result['scores']['semantic'],
-                'lexical_score': result['scores']['lexical'],
-                'overall_score': result['scores']['overall'],
-                'grade': result['scores']['grade']
-            })
-        
-        return output.getvalue()
-    
-    @staticmethod
-    def to_markdown(data: Dict) -> str:
-        """Exporta a Markdown"""
-        md = []
-        md.append("# Resultados de Evaluación SSEAR\n")
-        
-        scores = data.get('scores', {})
-        md.append(f"## Puntuaciones\n")
-        md.append(f"- **Similitud Semántica**: {scores.get('semantic', 0):.1f}%\n")
-        md.append(f"- **Similitud Léxica**: {scores.get('lexical', 0):.1f}%\n")
-        md.append(f"- **Calificación General**: {scores.get('overall', 0):.1f}%\n")
-        md.append(f"- **Grado**: {scores.get('grade', 'N/A')}\n")
-        
-        return '\n'.join(md)
+    def stats(self) -> Dict:
+        total = self.hits + self.misses
+        return {
+            'size':      len(self._cache),
+            'max_size':  self.max_size,
+            'hits':      self.hits,
+            'misses':    self.misses,
+            'hit_rate':  round(self.hits / max(total, 1), 3)
+        }
 
 
 class Logger:
     """Logger personalizado"""
-    
+
     @staticmethod
-    def setup_logging(name: str, level: str = 'INFO'):
+    def setup_logging(name: str, level: str = 'INFO') -> logging.Logger:
         """Configura logging"""
-        logger = logging.getLogger(name)
-        logger.setLevel(getattr(logging, level))
-        
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        
-        return logger
-    
+        lgr = logging.getLogger(name)
+        lgr.setLevel(getattr(logging, level))
+
+        if not lgr.handlers:
+            handler   = logging.StreamHandler()
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            )
+            handler.setFormatter(formatter)
+            lgr.addHandler(handler)
+
+        return lgr
+
     @staticmethod
-    def log_evaluation(logger, reference_len: int, student_len: int, 
-                      semantic_score: float, lexical_score: float):
-        """Registra evaluación"""
-        logger.info(
-            f"Evaluación completada - "
+    def log_evaluation(lgr: logging.Logger, reference_len: int, student_len: int,
+                       semantic_score: float, lexical_score: float):
+        """Registra una evaluación"""
+        lgr.info(
+            f"Evaluación - "
             f"Ref: {reference_len} palabras, "
             f"Est: {student_len} palabras, "
             f"Semántica: {semantic_score:.2%}, "
@@ -242,62 +160,68 @@ class Logger:
 
 class ValidationUtils:
     """Utilidades de validación"""
-    
+
     @staticmethod
-    def is_valid_text(text: str, min_length: int = 5, max_length: int = 10000) -> Tuple[bool, str]:
+    def is_valid_text(text: str, min_length: int = 5,
+                      max_length: int = 10000) -> Tuple[bool, str]:
         """Valida si el texto es válido"""
         if not text or not isinstance(text, str):
             return False, "El texto debe ser una cadena no vacía"
-        
+
         text = text.strip()
-        
+
         if len(text) < min_length:
             return False, f"El texto debe tener al menos {min_length} caracteres"
-        
+
         if len(text) > max_length:
             return False, f"El texto no debe exceder {max_length} caracteres"
-        
+
         return True, "OK"
-    
+
     @staticmethod
     def is_valid_request(reference: str, student: str) -> Tuple[bool, str]:
         """Valida si la solicitud es válida"""
         valid_ref, msg_ref = ValidationUtils.is_valid_text(reference, min_length=10)
         if not valid_ref:
             return False, f"Respuesta de referencia: {msg_ref}"
-        
+
         valid_stu, msg_stu = ValidationUtils.is_valid_text(student, min_length=5)
         if not valid_stu:
             return False, f"Respuesta de estudiante: {msg_stu}"
-        
+
         return True, "OK"
 
 
 class PerformanceMonitor:
-    """Monitorea rendimiento"""
-    
+    """Monitorea rendimiento del sistema"""
+
     def __init__(self):
-        self.times = {}
-    
+        self.times: Dict = {}
+        self.history: List = []
+
     def start(self, operation: str):
         """Inicia cronómetro"""
         self.times[operation] = datetime.now()
-    
+
     def end(self, operation: str) -> float:
         """Termina cronómetro y retorna tiempo en milisegundos"""
         if operation not in self.times:
-            return 0
+            return 0.0
         elapsed = (datetime.now() - self.times[operation]).total_seconds() * 1000
         del self.times[operation]
+        self.history.append({'operation': operation, 'ms': elapsed})
         return elapsed
-    
+
     def get_stats(self) -> Dict:
-        """Retorna estadísticas"""
-        return self.times
+        return {
+            'active':  list(self.times.keys()),
+            'history': self.history[-10:]
+        }
 
 
-# Instancia global de caché
+# ============================================================
+# INSTANCIAS GLOBALES
+# ============================================================
+
 cache_manager = CacheManager()
-
-# Logger global
-app_logger = Logger.setup_logging('SSEAR')
+app_logger    = Logger.setup_logging('SSEAR')

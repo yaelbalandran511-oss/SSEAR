@@ -1,273 +1,256 @@
 """
 SSEAR - Sistema Semántico de Evaluación Automatizada de Respuestas
-Backend Principal - Flask Server
+API Flask - Backend Principal
 """
 
 import os
 import json
+import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
 import webbrowser
 import threading
-import logging
 
 import config
-
-# Importar módulos de análisis
-from concept_analyzer import ConceptAnalyzer
-from lexical_analyzer import LexicalAnalyzer
+from evaluation_engine import EvaluationEngine
 from feedback_generator import FeedbackGenerator
 
 # Configurar logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Inicializar Flask
-# Servir archivos estáticos (index.html, client.js, styles.css) desde la raíz
 app = Flask(__name__, static_folder='.', static_url_path='')
-# Permitir CORS explícitamente para las rutas de la API
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
+# Inicializar motor de evaluación
+logger.info("Inicializando motor de evaluación...")
+evaluation_engine = EvaluationEngine()
+feedback_generator = FeedbackGenerator()
+logger.info("Motor de evaluación cargado exitosamente")
+
+
+# ============================================================
+# RUTAS API
+# ============================================================
 
 @app.route('/')
 def index():
+    """Sirve la página principal"""
     return app.send_static_file('index.html')
-
-# Inicializar analizadores
-logger.info("Cargando modelos de IA...")
-concept_analyzer = ConceptAnalyzer()
-lexical_analyzer = LexicalAnalyzer()
-feedback_generator = FeedbackGenerator()
-logger.info("Modelos cargados exitosamente")
-
-
-@app.before_request
-def initialize_models():
-    """Inicializa los modelos en la primera solicitud"""
-    pass
 
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Endpoint de verificación de salud"""
+    """Verifica el estado del servicio"""
     return jsonify({
         'status': 'ok',
         'timestamp': datetime.now().isoformat(),
-        'models_loaded': True
-    })
+        'version': config.API_VERSION,
+        'models_loaded': True,
+        'cache_stats': evaluation_engine.get_cache_stats()
+    }), 200
 
 
 @app.route('/api/evaluate', methods=['POST'])
 def evaluate_answer():
     """
-    Endpoint principal de evaluación de respuestas
-    
-    Recibe:
-        - reference_answer: str (respuesta de referencia/correcta)
-        - student_answer: str (respuesta del estudiante a evaluar)
-        - question: str (pregunta original, opcional)
-        - context: str (contexto adicional, opcional)
+    Endpoint principal de evaluación
+
+    Entrada:
+        {
+            "question": "¿Qué es la fotosíntesis?",
+            "reference_answer": "Respuesta correcta...",
+            "student_answer": "Respuesta del alumno...",
+            "context": "Contexto opcional"
+        }
     """
     try:
-        data = request.json
-        
-        # Validar entrada
-        if not data or 'reference_answer' not in data or 'student_answer' not in data or 'question' not in data:
-            return jsonify({
-                'error': 'Se requieren reference_answer, student_answer y question'
-            }), 400
-        
+        data = request.json or {}
+
+        question  = data.get('question', '').strip()
         reference = data.get('reference_answer', '').strip()
-        student = data.get('student_answer', '').strip()
-        question = data.get('question', '')
-        context = data.get('context', '')
-        
-        if not reference or not student or not question:
+        student   = data.get('student_answer', '').strip()
+        context   = data.get('context', '').strip()
+
+        if not all([question, reference, student]):
             return jsonify({
-                'error': 'La pregunta, la respuesta de referencia y la respuesta del estudiante no pueden estar vacías'
+                'error': 'Se requieren: question, reference_answer, student_answer',
+                'status': 'validation_error'
             }), 400
-        
-        logger.info(f"Evaluando respuesta: {student[:50]}...")
-        
-        # ========== ANÁLISIS SEMÁNTICO ==========
-        semantic_results = concept_analyzer.analyze(question, reference, student)
-        
-        # ========== ANÁLISIS LÉXICO ==========
-        lexical_results = lexical_analyzer.analyze(reference, student)
-        
-        # ========== CÁLCULO DE PUNTUACIONES ==========
-        semantic_score = semantic_results['similarity']
-        lexical_score = lexical_results['similarity']
-        
-        # Promedio ponderado estándar: 70% semántica + 30% léxica
-        overall_score = (semantic_score * config.SEMANTIC_WEIGHT) + (lexical_score * config.LEXICAL_WEIGHT)
-        
-        # ========== GENERACIÓN DE RETROALIMENTACIÓN ==========
-        feedback = feedback_generator.generate(
+
+        logger.info(f"Evaluando respuesta: {student[:60]}...")
+
+        evaluation_result = evaluation_engine.evaluate(
+            question=question,
             reference_answer=reference,
             student_answer=student,
-            semantic_results=semantic_results,
-            lexical_results=lexical_results,
-            overall_score=overall_score,
-            question=question
+            context=context,
+            use_cache=True
         )
-        
-        # ========== CONSTRUCCIÓN DE RESPUESTA ==========
+
+        feedback = feedback_generator.generate(evaluation_result)
+
+        # Exponer scores/analysis/metadata en top-level para el frontend
+        scores   = evaluation_result.get('scores', {})
+        analysis = evaluation_result.get('analysis', {})
+        metadata = evaluation_result.get('metadata', {})
+
         response = {
-            'status': 'success',
+            'status':    'success',
             'timestamp': datetime.now().isoformat(),
-            'scores': {
-                'semantic': round(semantic_score * 100, 2),
-                'lexical': round(lexical_score * 100, 2),
-                'overall': round(overall_score * 100, 2),
-                'grade': round(overall_score * 10, 1),
-                'grade_letter': get_grade_letter(overall_score)
-            },
-            'analysis': {
-                'semantic': semantic_results,
-                'lexical': lexical_results
-            },
-            'feedback': feedback,
-            'metadata': {
-                'reference_words': semantic_results['reference_tokens'],
-                'student_words': semantic_results['student_tokens'],
-                'matched_terms': lexical_results['matched_terms'],
-                'missing_terms': lexical_results['missing_terms'],
-                'extra_terms': lexical_results['extra_terms']
-            }
+            'version':   config.API_VERSION,
+            'cached':    evaluation_result.get('cached', False),
+            # Top-level para compatibilidad con client.js
+            'scores':    scores,
+            'analysis':  analysis,
+            'metadata':  metadata,
+            'feedback':  feedback,
+            # También incluir evaluation completo
+            'evaluation': evaluation_result
         }
-        
-        logger.info(f"Evaluación completada - Puntuación: {overall_score:.2%}")
-        
+
+        logger.info(f"Evaluación completada - Score: {scores.get('percentage', 0):.1f}%")
         return jsonify(response), 200
-        
+
     except Exception as e:
         logger.error(f"Error en evaluación: {str(e)}", exc_info=True)
         return jsonify({
-            'error': 'Error procesando la evaluación',
+            'error': 'Error interno del servidor',
+            'status': 'error',
             'details': str(e)
         }), 500
 
 
 @app.route('/api/batch-evaluate', methods=['POST'])
 def batch_evaluate():
-    """
-    Evalúa múltiples respuestas de una vez
-    
-    Recibe:
-        - evaluations: list of {reference_answer, student_answer}
-    """
+    """Evalúa múltiples respuestas en lote"""
     try:
-        data = request.json
+        data = request.json or {}
         evaluations = data.get('evaluations', [])
-        
+
         if not evaluations:
-            return jsonify({'error': 'No hay evaluaciones'}), 400
-        
-        results = []
+            return jsonify({'error': 'Campo evaluations vacío', 'status': 'validation_error'}), 400
+
+        if len(evaluations) > 100:
+            return jsonify({'error': 'Máximo 100 evaluaciones por solicitud', 'status': 'validation_error'}), 400
+
+        logger.info(f"Procesando lote de {len(evaluations)} evaluaciones...")
+
+        results, errors = [], []
+
         for idx, eval_item in enumerate(evaluations, start=1):
-            # Llamar a la lógica de evaluación existente
-            request_data = {
-                'reference_answer': eval_item.get('reference_answer', ''),
-                'student_answer': eval_item.get('student_answer', ''),
-                'question': eval_item.get('question', '')
-            }
+            try:
+                q = eval_item.get('question', '').strip()
+                r = eval_item.get('reference_answer', '').strip()
+                s = eval_item.get('student_answer', '').strip()
+                c = eval_item.get('context', '').strip()
 
-            # Validar campos obligatorios en cada elemento
-            if not request_data['reference_answer'] or not request_data['student_answer'] or not request_data['question']:
-                return jsonify({'error': f'El elemento {idx} del lote debe incluir reference_answer, student_answer y question'}), 400
+                if not all([q, r, s]):
+                    errors.append({'index': idx, 'error': 'Campos requeridos faltantes'})
+                    continue
 
-            semantic_results = concept_analyzer.analyze(
-                request_data['question'],
-                request_data['reference_answer'],
-                request_data['student_answer']
-            )
-            lexical_results = lexical_analyzer.analyze(
-                request_data['reference_answer'],
-                request_data['student_answer']
-            )
+                result = evaluation_engine.evaluate(
+                    question=q, reference_answer=r, student_answer=s, context=c
+                )
+                results.append({
+                    'index': idx,
+                    'student_answer': s[:100],
+                    'scores': result.get('scores', {}),
+                    'grade': result.get('scores', {}).get('grade', 'F')
+                })
+            except Exception as e:
+                logger.error(f"Error evaluando item {idx}: {str(e)}")
+                errors.append({'index': idx, 'error': str(e)})
 
-            semantic_score = semantic_results['similarity']
-            lexical_score = lexical_results['similarity']
-            overall_score = (semantic_score * config.SEMANTIC_WEIGHT) + (lexical_score * config.LEXICAL_WEIGHT)
-
-            results.append({
-                'student_answer': request_data['student_answer'],
-                'scores': {
-                    'semantic': round(semantic_score * 100, 2),
-                    'lexical': round(lexical_score * 100, 2),
-                    'overall': round(overall_score * 100, 2),
-                    'grade': round(overall_score * 10, 1),
-                    'grade_letter': get_grade_letter(overall_score)
-                }
-            })
-        
         return jsonify({
-            'status': 'success',
-            'count': len(results),
-            'results': results
-        }), 200
-        
+            'status': 'success' if not errors else 'partial_success',
+            'timestamp': datetime.now().isoformat(),
+            'total_processed': len(results),
+            'total_errors': len(errors),
+            'results': results,
+            'errors': errors if errors else None
+        }), 200 if not errors else 206
+
     except Exception as e:
-        logger.error(f"Error en evaluación por lotes: {str(e)}")
-        return jsonify({
-            'error': 'Error procesando evaluaciones',
-            'details': str(e)
-        }), 500
+        logger.error(f"Error en lote: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Error procesando lote', 'status': 'error', 'details': str(e)}), 500
 
 
 @app.route('/api/models-info', methods=['GET'])
 def models_info():
-    """Retorna información sobre los modelos cargados"""
+    """Retorna información sobre los modelos y configuración"""
     return jsonify({
-        'semantic_model': 'sentence-transformers (distiluse-base-multilingual)',
-        'lexical_model': 'spaCy + NLTK',
-        'language': 'español',
-        'offline': True,
-        'models_loaded': True,
-        'features': [
-            'Similitud semántica',
-            'Similitud léxica',
-            'Análisis de palabras clave',
-            'Retroalimentación automática',
-            'Procesamiento en lote'
-        ]
+        'service': 'SSEAR - Sistema Semántico de Evaluación Automatizada de Respuestas',
+        'version': config.API_VERSION,
+        'language': 'Spanish',
+        'offline_mode': True,
+        'models': {
+            'semantic': {
+                'name': config.SEMANTIC_MODEL,
+                'type': 'Transformer-based embeddings',
+                'language': 'Multilingual'
+            },
+            'lexical': {
+                'name': 'SnowballStemmer (NLTK)',
+                'language': config.LEXICAL_LANGUAGE
+            }
+        },
+        'weights': {
+            'semantic': config.SEMANTIC_WEIGHT,
+            'lexical':  config.LEXICAL_WEIGHT
+        },
+        'grade_thresholds': config.GRADE_THRESHOLDS,
+        'constraints': {
+            'min_reference_length': config.MIN_REFERENCE_LENGTH,
+            'min_student_length':   config.MIN_STUDENT_LENGTH,
+            'max_response_length':  config.MAX_RESPONSE_LENGTH,
+            'cache_size':           config.CACHE_SIZE
+        }
     }), 200
 
 
-def get_grade_letter(score):
-    """Convierte puntuación en rango 0-1 a calificación letra"""
-    for letter, threshold in config.GRADE_THRESHOLDS.items():
-        if score >= threshold:
-            return letter
-    return 'F'
+@app.route('/api/cache/stats', methods=['GET'])
+def cache_stats():
+    """Retorna estadísticas del caché"""
+    return jsonify(evaluation_engine.get_cache_stats()), 200
 
 
-def get_grade(score):
-    """Convierte puntuación en rango 0-1 a calificación numérica 0-10"""
-    return round(score * 10, 1)
+@app.route('/api/cache/clear', methods=['POST'])
+def cache_clear():
+    """Limpia el caché"""
+    evaluation_engine.clear_cache()
+    return jsonify({'status': 'ok', 'message': 'Caché limpiado exitosamente'}), 200
+
+
+# ============================================================
+# INICIO DEL SERVIDOR
+# ============================================================
+
+def open_browser():
+    """Abre el navegador automáticamente"""
+    import time
+    time.sleep(1.5)
+    webbrowser.open(f'http://localhost:{config.SERVER_PORT}')
+
+
+def run_server():
+    logger.info(f"Iniciando servidor SSEAR en {config.SERVER_HOST}:{config.SERVER_PORT}")
+    logger.info(f"Abre tu navegador en: http://localhost:{config.SERVER_PORT}")
+
+    threading.Thread(target=open_browser, daemon=True).start()
+
+    app.run(
+        host=config.SERVER_HOST,
+        port=config.SERVER_PORT,
+        debug=config.DEBUG_MODE,
+        use_reloader=False
+    )
 
 
 if __name__ == '__main__':
-    logger.info("Iniciando SSEAR - Sistema Semántico de Evaluación")
-    # Abrir navegador externo automáticamente en localhost
-    url = 'http://127.0.0.1:5000'
-    logger.info(f"Servidor disponible en: {url}")
-
-    # Abrir el navegador en una hebra separada para no bloquear el servidor
-    def _open_browser():
-        try:
-            webbrowser.open_new_tab(url)
-        except Exception:
-            pass
-
-    threading.Timer(1.0, _open_browser).start()
-
-    app.run(
-        host='127.0.0.1',
-        port=5000,
-        debug=True,
-        use_reloader=False,
-        threaded=True
-    )
+    run_server()

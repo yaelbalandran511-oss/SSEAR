@@ -1,9 +1,6 @@
-Flask>=3.0.0
-Flask-CORS>=4.0.0
-# Keep existing NumPy installed in the venv (reinstalled earlier)
-numpy>=1.24
+flask>=2.3.0
+flask-cors>=4.0.0
+numpy>=1.24.0
 scikit-learn>=1.3.0
-nltk>=3.8.1
-# Optional heavy ML deps (transformers/torch) are omitted to allow offline/demo mode
-# Install them later if you need full-model semantic embeddings.
-Werkzeug>=3.0.1
+sentence-transformers>=2.2.0
+nltk>=3.8.0
