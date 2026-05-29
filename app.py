@@ -15,6 +15,7 @@ import threading
 import config
 from evaluation_engine import EvaluationEngine
 from feedback_generator import FeedbackGenerator
+from excel_logger import append_evaluation_to_excel
 
 # Configurar logging
 logging.basicConfig(
@@ -94,6 +95,13 @@ def evaluate_answer():
         )
 
         feedback = feedback_generator.generate(evaluation_result)
+        append_evaluation_to_excel(
+            question=question,
+            reference_answer=reference,
+            student_answer=student,
+            evaluation_result=evaluation_result,
+            feedback=feedback
+        )
 
         # Exponer scores/analysis/metadata en top-level para el frontend
         scores   = evaluation_result.get('scores', {})

@@ -1,4 +1,6 @@
-# SSEAR — Sistema Semántico de Evaluación Automatizada de Respuestas
+from pathlib import Path
+
+content = '''# SSEAR — Sistema Semántico de Evaluación Automatizada de Respuestas
 
 Sistema de evaluación automática de respuestas abiertas con retroalimentación personalizada, análisis semántico y análisis léxico.
 
@@ -334,3 +336,7 @@ El sistema digestivo es el conjunto de órganos que transforman los alimentos en
 
 **Respuesta del alumno:**
 Es una red de cables y circuitos que permite que las computadoras funcionen y se conecten a internet.
+'''
+
+Path('README.md').write_text(content, encoding='utf-8')
+print('README updated')
