@@ -89,8 +89,8 @@ function updateStatusBadge(status, message) {
 
     if (modeBadge) {
         if (status === 'connected') {
-            modeBadge.textContent = 'ONLINE';
-            modeBadge.className   = 'mode-badge online';
+            modeBadge.textContent = '';
+            modeBadge.className   = 'mode-badge';
         } else if (status === 'error') {
             modeBadge.textContent = 'OFFLINE';
             modeBadge.className   = 'mode-badge';
@@ -128,8 +128,8 @@ async function evaluateAnswer() {
     const referenceAnswer = (document.getElementById('referenceAnswer')?.value || '').trim();
     const studentAnswer   = (document.getElementById('studentAnswer')?.value   || '').trim();
 
-    if (!referenceAnswer || !studentAnswer) {
-        showError('Por favor ingresa la respuesta de referencia y la respuesta del estudiante.');
+    if (!question || !referenceAnswer || !studentAnswer) {
+        showError('Por favor ingresa la pregunta, la respuesta de referencia y la respuesta del estudiante.');
         return;
     }
 
